@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>闪卡制作 - Word List 2</title>
+    <style>
+        :root {
+            --primary: #007AFF;
+            --bg: #F5F5F7;
+            --card-white: rgba(255, 255, 255, 0.9);
+            --text-main: #1D1D1F;
+            --text-sub: #86868B;
+            --accent-bg: #E8F2FF;
+            --highlight-bg: #cce4ff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; padding: 20px; overflow-x: hidden;
+        }
+
+        header { width: 100%; max-width: 450px; margin-bottom: 15px; text-align: center; }
+        .progress-container { width: 100%; height: 6px; background: #E0E0E2; border-radius: 3px; margin-top: 10px; overflow: hidden; }
+        #progress-bar { height: 100%; width: 0%; background: var(--primary); transition: width 0.3s ease; }
+
+        /* Card 3D Stage */
+        .stage { perspective: 1200px; width: 100%; max-width: 450px; height: 380px; margin: 15px 0; cursor: pointer; }
+        .card {
+            position: relative; width: 100%; height: 100%;
+            transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform-style: preserve-3d;
+        }
+        .card.is-flipped { transform: rotateY(180deg); }
+
+        .card-face {
+            position: absolute; width: 100%; height: 100%; backface-visibility: hidden;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: var(--card-white); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border-radius: 28px; box-shadow: 0 10px 40px rgba(0,0,0,0.06);
+            padding: 25px; border: 1px solid rgba(255,255,255,0.6);
+        }
+
+        .card-back { transform: rotateY(180deg); justify-content: flex-start; padding-top: 40px; overflow-y: auto;}
+
+        /* Typography */
+        .word-text { font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 10px; transition: 0.3s; }
+        .word-text.speaking { color: var(--primary); transform: scale(1.05); }
+        .phonetic { font-size: 18px; color: var(--text-sub); margin-bottom: 20px; font-family: "Lucida Sans Unicode", sans-serif; }
+        
+        .definition { font-size: 24px; font-weight: 700; color: var(--primary); margin-bottom: 20px; text-align: center; }
+        
+        /* Example Box & Highlight */
+        .example-box {
+            background: var(--accent-bg); padding: 15px; border-radius: 16px;
+            width: 100%; text-align: left; border-left: 4px solid var(--primary);
+        }
+        .ex-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+        .example-en { font-size: 16px; font-weight: 600; line-height: 1.5; color: #333; flex: 1; transition: opacity 0.3s; }
+        .example-zh { font-size: 14px; color: #555; line-height: 1.4; }
+        
+        .highlight-word {
+            background-color: var(--highlight-bg); color: var(--primary);
+            padding: 2px 6px; border-radius: 6px; font-weight: 800;
+            display: inline-block; box-shadow: 0 2px 4px rgba(0,122,255,0.1);
+        }
+
+        /* Controls */
+        .controls { width: 100%; max-width: 450px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        button {
+            border: none; border-radius: 16px; padding: 16px; font-size: 16px; font-weight: 600;
+            background: white; cursor: pointer; transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04); display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        button:active { transform: scale(0.95); background: #F2F2F7; }
+        
+        .primary-btn { background: var(--primary); color: white; margin-top: 5px; }
+        .reset-btn { background: white; color: var(--text-main); margin-top: 5px; border: 1px solid #E0E0E2; }
+        
+        .speaker-btn { position: absolute; top: 20px; right: 20px; background: none; box-shadow: none; font-size: 24px; padding: 10px; border-radius: 50%; }
+        
+        /* 独立例句发音按钮 */
+        .ex-speaker-btn { 
+            background: rgba(255,255,255,0.6); box-shadow: 0 2px 6px rgba(0,0,0,0.05); 
+            font-size: 16px; padding: 8px; border-radius: 50%; width: 36px; height: 36px; 
+            flex-shrink: 0; color: var(--primary);
+        }
+        .ex-speaker-btn:active { background: #d0e4ff; transform: scale(0.9); }
+
+        /* Settings */
+        .settings-panel { width: 100%; max-width: 450px; margin-top: 25px; background: rgba(0,0,0,0.03); padding: 15px; border-radius: 18px; }
+        .setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 14px; }
+        .setting-row:last-child { margin-bottom: 0; }
+        input[type="range"] { width: 60%; accent-color: var(--primary); }
+        input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
+
+        /* Scrollbar for back card */
+        .card-back::-webkit-scrollbar { width: 4px; }
+        .card-back::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2 id="title">Word List 2</h2>
+        <div id="counter" style="font-size: 13px; color: var(--text-sub); margin-top: 5px;">1 / 56</div>
+        <div class="progress-container"><div id="progress-bar"></div></div>
+    </header>
+
+    <div class="stage" onclick="flip()">
+        <div class="card" id="card">
+            <div class="card-face card-front">
+                <button class="speaker-btn" onclick="event.stopPropagation(); speakWord();">🔊</button>
+                <div class="word-text" id="word-en">Loading...</div>
+                <div class="phonetic" id="word-phonetic"></div>
+                <div style="color:var(--text-sub); font-size: 14px; position: absolute; bottom: 30px;">点击卡片翻面查看释义</div>
+            </div>
+            <div class="card-face card-back">
+                <div class="definition" id="word-zh"></div>
+                <div class="example-box">
+                    <div class="ex-header">
+                        <div class="example-en" id="ex-en"></div>
+                        <button class="ex-speaker-btn" title="朗读例句" onclick="event.stopPropagation(); speakExample();">🔊</button>
+                    </div>
+                    <div class="example-zh" id="ex-zh"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="prev()">⬅️ 上一个</button>
+        <button onclick="next()">下一个 ➡️</button>
+        <button class="primary-btn" onclick="randomWord()">🔀 随机测试</button>
+        <button class="reset-btn" onclick="resetApp()">🔄 重置进度</button>
+    </div>
+
+    <div class="settings-panel">
+        <div class="setting-row">
+            <span>自动发音 (切换单词时)</span>
+            <input type="checkbox" id="auto-play" checked>
+        </div>
+        <div class="setting-row">
+            <span>语速调节 (<span id="speed-val">0.8</span>x)</span>
+            <input type="range" id="speed-range" min="0.5" max="1.2" step="0.1" value="0.8">
+        </div>
+        <div class="setting-row" style="font-size: 12px; color: var(--text-sub); justify-content: center; margin-top: 8px;">
+            <span id="voice-status">正在加载高质量语音引擎...</span>
+        </div>
+    </div>
+
+    <script>
+        const wordList = [
+            {w: "definite", t: "明确的，肯定的", en: "On a definite day marked on his calendar, he decided to go abroad.", zh: "在日历上标注的一个明确日子，他决定出国。"},
+            {w: "cautious", t: "谨慎的，小心的", en: "His father, a cautious politician, objected to this.", zh: "他的父亲，一个谨慎的政治家，反对这件事。"},
+            {w: "prayer", t: "祈祷，祷告", en: "She whispered a silent prayer.", zh: "她默默地祈祷。"},
+            {w: "nest", t: "巢，窝", en: "He helped a gardener rescue a nest of birds.", zh: "他帮助一名园丁营救了一巢鸟。"},
+            {w: "domestic", t: "国内的；家庭的", en: "They debated the domestic consequences of his departure.", zh: "他们正在辩论他离开的国内后果。"},
+            {w: "chest", t: "胸腔；箱子", en: "He crossed his arms over his chest.", zh: "他双手交叉放在胸前。"},
+            {w: "airline", t: "航空公司", en: "He booked a flight with a domestic airline.", zh: "他订了一家国内航空公司的机票。"},
+            {w: "rebel", t: "反叛者；造反", en: "He was bound to follow the royal path, but he was a rebel at heart.", zh: "他注定要追随王室道路，但他内心是个反叛者。"},
+            {w: "satisfactory", t: "令人满意的", en: "He ate a satisfactory stew and put on his warm stockings.", zh: "他吃了一份令人满意的炖菜，穿上保暖的长袜。"},
+            {w: "stem", t: "茎，干；起源于", en: "His passion stems from an incredible enthusiasm for biology.", zh: "他的热情源于对生物学难以置信的喜爱。"},
+            {w: "render", t: "使得，致使；提供", en: "Fearing it would render the family's fame a vague memory.", zh: "担心这会使得家族的名声变成一个模糊的回忆。"},
+            {w: "object", t: "反对；物体", en: "His father objected to his plan.", zh: "他的父亲反对他的计划。"},
+            {w: "gardener", t: "园丁", en: "He helped a gardener rescue a nest of birds.", zh: "他帮助一名园丁营救了一巢鸟。"},
+            {w: "shrink", t: "退缩；收缩", en: "He refused to shrink from any barrier.", zh: "他拒绝在障碍面前退缩。"},
+            {w: "parade", t: "游行，检阅", en: "The royal marching band played in the parade.", zh: "皇家军乐队在游行中演奏。"},
+            {w: "rumour", t: "谣言，传闻", en: "A rumour spread through the parliament.", zh: "一个谣言在议会中传开。"},
+            {w: "rug", t: "地毯", en: "He had to sell a collection of old rugs.", zh: "他不得不卖掉他收藏的精美地毯。"},
+            {w: "establish", t: "建立，确立", en: "His steady loyalty helped him establish a new life.", zh: "他稳定的忠诚帮助他建立了新生活。"},
+            {w: "primarily", t: "主要地，首先", en: "The lad was primarily stimulated by an enthusiasm for biology.", zh: "这个小伙子主要被对生物学的热情所激励。"},
+            {w: "kindness", t: "仁慈，好意", en: "The magnitude of his kindness roused the public's praise.", zh: "他仁慈的程度唤醒了公众的赞扬。"},
+            {w: "breast", t: "胸部，乳房", en: "She held the baby gently to her breast.", zh: "她把婴儿温柔地抱在胸前。"},
+            {w: "sticky", t: "粘的，粘性的", en: "The table was covered in a sticky substance.", zh: "桌子上覆盖着一层黏糊糊的物质。"},
+            {w: "boost", t: "促进，提升", en: "The new policy will boost the domestic economy.", zh: "新政策将促进国内经济。"},
+            {w: "fund", t: "资金；资助", en: "To fund his journey, he had to sell his stock.", zh: "为了资助他的旅程，他不得不卖掉他的股票。"},
+            {w: "incredible", t: "难以置信的", en: "He had an incredible enthusiasm for biology.", zh: "他对生物学有一种难以置信的热情。"},
+            {w: "abroad", t: "到国外，在国外", en: "He decided to go abroad to explore his true personality.", zh: "他决定去国外探索自己真正的人格。"},
+            {w: "display", t: "展示，陈列", en: "They will display the royal collection in the museum.", zh: "他们将在博物馆里展示皇家藏品。"},
+            {w: "particle", t: "微粒，颗粒", en: "He wanted to study every particle in the marine world.", zh: "他想研究海洋世界里的每一个微粒。"},
+            {w: "frog", t: "青蛙", en: "A frog jumped into the pond.", zh: "一只青蛙跳进了池塘。"},
+            {w: "impression", t: "印象，印记", en: "He made a good impression on the delegate.", zh: "他给代表留下了好印象。"},
+            {w: "biology", t: "生物学", en: "Primarily stimulated by an incredible enthusiasm for biology.", zh: "主要被一种对生物学的难以置信的热情所激励。"},
+            {w: "drunk", t: "醉的", en: "The fisherman was too drunk to drive.", zh: "那个渔民喝得太醉了，不能开车。"},
+            {w: "barrier", t: "障碍，屏障", en: "He refused to shrink from any barrier.", zh: "他拒绝在障碍面前退缩。"},
+            {w: "stock", t: "股票；库存", en: "He had to sell his stock and a collection of old rugs.", zh: "他不得不卖掉他的股票和他收藏的精美地毯。"},
+            {w: "fisherman", t: "渔民，渔夫", en: "He wanted to evaluate the depression levels of a fisherman.", zh: "他想评估一个渔民的萧条（抑郁）程度。"},
+            {w: "politician", t: "政治家，政客", en: "His father, a cautious politician, objected to this.", zh: "他的父亲，一个谨慎的政治家，反对这件事。"},
+            {w: "royal", t: "王室的，皇家的", en: "The young man was bound to follow his ancestors' royal path.", zh: "这个年轻人注定要追随他祖先的王室道路。"},
+            {w: "barber", t: "理发师", en: "The barber cut his hair short.", zh: "理发师把他的头发剪短了。"},
+            {w: "stocking", t: "长袜", en: "He put on his warm stockings, knowing his choice had merit.", zh: "他穿上保暖的长袜，知道自己的选择是有价值的。"},
+            {w: "delegate", t: "代表，代表团成员", en: "He worked as a delegate for a ministry.", zh: "他作为一名部委的代表工作。"},
+            {w: "highlight", t: "强调；最精彩的部分", en: "He highlighted the importance of biological research.", zh: "他强调了生物学研究的重要性。"},
+            {w: "depression", t: "抑郁；萧条", en: "Inputting data to evaluate the depression levels.", zh: "输入数据来评估萧条程度。"},
+            {w: "signature", t: "签名，签字", en: "He didn't overlook the signature on a contract.", zh: "他没有忽视合同上的签名。"},
+            {w: "atmosphere", t: "气氛，大气层", en: "The atmosphere in the parliament was stiff.", zh: "议会里的气氛很僵硬。"},
+            {w: "evaluate", t: "评估，评价", en: "He used data to evaluate the depression levels.", zh: "他用数据来评估萧条程度。"},
+            {w: "rescue", t: "营救，救援", en: "He helped a gardener rescue a nest of birds.", zh: "他帮助一名园丁营救了一巢鸟。"},
+            {w: "personality", t: "人格，个性", en: "He went abroad to explore his true personality.", zh: "他去国外探索自己真正的人格。"},
+            {w: "latter", t: "后者的；后者", en: "Between the two options, he firmly chose the latter.", zh: "在这两个选项中，他坚定地选择了后者。"},
+            {w: "parliament", t: "议会，国会", en: "The atmosphere in the parliament was stiff.", zh: "议会里的气氛很僵硬。"},
+            {w: "input", t: "输入，投入", en: "He was inputting data to evaluate the results.", zh: "他正在输入数据来评估结果。"},
+            {w: "partial", t: "部分的；偏袒的", en: "He only had a partial understanding of the situation.", zh: "他对情况只有部分的了解。"},
+            {w: "loyalty", t: "忠诚，忠实", en: "His steady loyalty to his dream helped him establish a new life.", zh: "他对梦想的稳定忠诚帮助他建立了新生活。"},
+            {w: "calendar", t: "日历，历法", en: "On a definite day marked on his calendar, he decided to leave.", zh: "在日历上标注的一个明确日子，他决定离开。"},
+            {w: "overlook", t: "忽视；俯瞰", en: "He didn't overlook any detail.", zh: "他没有忽视任何细节。"},
+            {w: "debate", t: "辩论，讨论", en: "They debated the domestic consequences of his departure.", zh: "他们正在辩论他离开的国内后果。"},
+            {w: "stoop", t: "弯腰；屈从", en: "He had to stoop to enter the small room.", zh: "他不得不弯腰进入那个小房间。"}
+        ];
+
+        let index = 0;
+        let selectedVoice = null;
+        const synth = window.speechSynthesis;
+        const card = document.getElementById('card');
+        const speedRange = document.getElementById('speed-range');
+        const speedVal = document.getElementById('speed-val');
+        const voiceStatus = document.getElementById('voice-status');
+        const autoPlayCb = document.getElementById('auto-play');
+
+        function loadVoices() {
+            const voices = synth.getVoices();
+            if(voices.length === 0) return;
+
+            const preferredNames = [
+                'Samantha', 'Alex', 'Daniel', 
+                'Google US English', 'Google UK English Female',
+                'Microsoft Zira', 'Microsoft David'
+            ];
+
+            for (let name of preferredNames) {
+                const voice = voices.find(v => v.name.includes(name));
+                if (voice) { selectedVoice = voice; break; }
+            }
+
+            if (!selectedVoice) {
+                selectedVoice = voices.find(v => v.lang === 'en-US' || v.lang === 'en-GB') || voices[0];
+            }
+
+            voiceStatus.innerText = `当前语音引擎: ${selectedVoice.name}`;
+        }
+
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+
+        function update() {
+            const data = wordList[index];
+            card.classList.remove('is-flipped');
+            
+            setTimeout(() => {
+                document.getElementById('word-en').innerText = data.w;
+                document.getElementById('word-phonetic').innerText = ""; 
+                document.getElementById('word-zh').innerText = data.t;
+                
+                // 智能正则高亮算法
+                const wordRegex = new RegExp('(' + data.w + '[a-z]*)', 'gi');
+                const highlightedEn = data.en.replace(wordRegex, '<span class="highlight-word">$1</span>');
+                
+                document.getElementById('ex-en').innerHTML = highlightedEn;
+                document.getElementById('ex-zh').innerText = data.zh;
+                
+                document.getElementById('counter').innerText = `${index + 1} / ${wordList.length}`;
+                document.getElementById('progress-bar').style.width = `${((index+1)/wordList.length)*100}%`;
+                
+                if(autoPlayCb.checked) {
+                    setTimeout(speakWord, 300);
+                }
+            }, 150);
+        }
+
+        function speakWord() {
+            if(synth.speaking) synth.cancel(); 
+            
+            const utter = new SpeechSynthesisUtterance(wordList[index].w);
+            utter.lang = 'en-US';
+            utter.rate = parseFloat(speedRange.value);
+            if (selectedVoice) utter.voice = selectedVoice;
+            
+            const wordText = document.getElementById('word-en');
+            utter.onstart = () => wordText.classList.add('speaking');
+            utter.onend = () => wordText.classList.remove('speaking');
+            utter.onerror = () => wordText.classList.remove('speaking');
+            
+            synth.speak(utter);
+        }
+
+        function speakExample() {
+            if(synth.speaking) synth.cancel(); 
+            
+            const utter = new SpeechSynthesisUtterance(wordList[index].en);
+            utter.lang = 'en-US';
+            utter.rate = parseFloat(speedRange.value);
+            if (selectedVoice) utter.voice = selectedVoice;
+            
+            const exText = document.getElementById('ex-en');
+            utter.onstart = () => exText.style.opacity = '0.6';
+            utter.onend = () => exText.style.opacity = '1';
+            utter.onerror = () => exText.style.opacity = '1';
+            
+            synth.speak(utter);
+        }
+
+        function flip() { card.classList.toggle('is-flipped'); }
+        function next() { if(index < wordList.length - 1) { index++; update(); } }
+        function prev() { if(index > 0) { index--; update(); } }
+        
+        function randomWord() {
+            let newIndex = index;
+            while(newIndex === index) { 
+                newIndex = Math.floor(Math.random() * wordList.length);
+            }
+            index = newIndex;
+            update();
+        }
+
+        function resetApp() {
+            if(synth.speaking) synth.cancel();
+            index = 0; 
+            
+            speedRange.value = 0.8;
+            speedVal.innerText = '0.8';
+            autoPlayCb.checked = true;
+            
+            update(); 
+        }
+
+        speedRange.oninput = (e) => { speedVal.innerText = e.target.value; };
+
+        document.addEventListener('keydown', (e) => {
+            if(e.code === 'Space') { e.preventDefault(); flip(); }
+            if(e.code === 'ArrowRight') next();
+            if(e.code === 'ArrowLeft') prev();
+        });
+
+        loadVoices();
+        update();
+    </script>
+</body>
+</html>
