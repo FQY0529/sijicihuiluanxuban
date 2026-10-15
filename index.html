@@ -465,6 +465,45 @@ body::before{
   margin-top:14px; text-align:center; font-size:12px; color:var(--text-muted);
 }
 
+/* --- 播放模式选择 --- */
+.mode-card{ margin-top:14px; }
+.mode-select{
+  display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;
+}
+.mode-btn{
+  flex:1; min-width:80px; min-height:38px;
+  padding:0 12px; border-radius:999px;
+  border:1px solid var(--line);
+  background:var(--surface-soft);
+  color:var(--text-soft);
+  font:inherit; font-size:13px; font-weight:700;
+  cursor:pointer; transition:all .15s ease;
+}
+.mode-btn.active{
+  background:var(--chip-active-bg);
+  border-color:var(--chip-active-border);
+  color:var(--chip-active-text);
+}
+.mode-desc{
+  margin-top:10px; font-size:12px; color:var(--text-muted); line-height:1.5;
+}
+.mode-btn:active{ transform:scale(.98); }
+
+/* --- 高级设置折叠 --- */
+details.play-settings{
+  margin-top:14px; border:1px solid var(--line); border-radius:14px;
+  background:var(--surface-soft); overflow:hidden;
+}
+details.play-settings > summary{
+  list-style:none; cursor:pointer; user-select:none;
+  display:flex; justify-content:space-between; align-items:center;
+  padding:12px 14px; font-size:14px; font-weight:700; color:var(--text);
+}
+details.play-settings > summary::-webkit-details-marker{ display:none; }
+details.play-settings > summary .set-caret{ transition:transform .2s ease; color:var(--text-muted); }
+details.play-settings[open] > summary .set-caret{ transform:rotate(90deg); }
+.play-settings-body{ padding:0 14px 14px; display:flex; flex-direction:column; gap:12px; }
+
 
 .top-actions{
   display:flex; align-items:center; gap:8px;
@@ -646,22 +685,17 @@ body::before{
         <button class="transport icon-btn" id="playerNextBtn" aria-label="下一词">⏭</button>
       </div>
 
+      <div class="setting-card mode-card">
+        <div class="setting-head"><strong>播放模式</strong><span id="modeText">简单版</span></div>
+        <div class="mode-select" id="modeSelect">
+          <button class="mode-btn active" data-mode="simple">简单版</button>
+          <button class="mode-btn" data-mode="basic">基础版</button>
+          <button class="mode-btn" data-mode="advanced">进阶版</button>
+        </div>
+        <div class="mode-desc" id="modeDesc">自动播放：单词读音 + 中文意思</div>
+      </div>
+
       <div class="setting-stack">
-        <div class="setting-card">
-          <div class="setting-head"><strong>语速</strong><span id="speedText">0.90x</span></div>
-          <div class="chips" id="speedChips"></div>
-        </div>
-
-        <div class="setting-card">
-          <div class="setting-head"><strong>词间停顿</strong><span id="gapText">2.0 秒</span></div>
-          <div class="chips" id="gapChips"></div>
-        </div>
-
-        <div class="setting-card">
-          <div class="setting-head"><strong>定时关闭</strong><span id="timerHeadText">不限</span></div>
-          <div class="chips" id="timerChips"></div>
-        </div>
-
         <div class="setting-card">
           <div class="switch-row">
             <div class="switch-text">
@@ -671,6 +705,26 @@ body::before{
             <button class="switch on" id="autoPlaySwitch" aria-label="自动朗读"></button>
           </div>
         </div>
+
+        <details class="play-settings" id="playSettings">
+          <summary>播放设置（语速 / 停顿 / 定时）<span class="set-caret">›</span></summary>
+          <div class="play-settings-body">
+            <div class="setting-card">
+              <div class="setting-head"><strong>语速</strong><span id="speedText">0.90x</span></div>
+              <div class="chips" id="speedChips"></div>
+            </div>
+
+            <div class="setting-card">
+              <div class="setting-head"><strong>词间停顿</strong><span id="gapText">2.0 秒</span></div>
+              <div class="chips" id="gapChips"></div>
+            </div>
+
+            <div class="setting-card">
+              <div class="setting-head"><strong>定时关闭</strong><span id="timerHeadText">不限</span></div>
+              <div class="chips" id="timerChips"></div>
+            </div>
+          </div>
+        </details>
       </div>
 
       <div class="voice-note" id="voiceStatus">正在加载语音引擎…</div>
@@ -700,7 +754,8 @@ const state = {
   speed: parseFloat(localStorage.getItem('cet4_sleepSpeed') || '0.9'),
   gap: parseInt(localStorage.getItem('cet4_sleepGap') || '2000', 10),
   timerMinutes: parseInt(localStorage.getItem('cet4_sleepTimer') || '0', 10),
-  theme: savedTheme || 'light'
+  theme: savedTheme || 'light',
+  mode: localStorage.getItem('cet4_mode') || 'simple'
 };
 
 const sleepPlayer = {
@@ -743,6 +798,9 @@ const autoPlaySwitch = document.getElementById('autoPlaySwitch');
 const voiceStatus = document.getElementById('voiceStatus');
 const statUnits = document.getElementById('statUnits');
 const statWords = document.getElementById('statWords');
+const modeSelect = document.getElementById('modeSelect');
+const modeText = document.getElementById('modeText');
+const modeDesc = document.getElementById('modeDesc');
 const themeToggleButtons = [
   document.getElementById('themeToggleHome'),
   document.getElementById('themeToggleStudy')
@@ -1100,6 +1158,52 @@ function restartSleep(label){
   runSleep(label || '播放中');
 }
 
+async function playWordByMode(item, token){
+  // 按当前模式播放一个单词的全部内容，返回 true 表示还需继续
+  const meanings = splitMeanings(item.t);
+  const example = sanitizeText(item.en) ? item : buildFallbackExample(item);
+  const zhRate = Math.max(0.9, state.speed);
+  const mode = state.mode;
+
+  // 1. 单词读音
+  await speakText(item.w, 'en-US', state.speed);
+  if (!sleepPlayer.active || token !== sleepPlayer.token) return;
+  await sleepDelay(200, token);
+  if (!sleepPlayer.active || token !== sleepPlayer.token) return;
+
+  // 2. 基础版：英文拼写
+  if (mode === 'basic') {
+    await spellWord(item, state.speed);
+    if (!sleepPlayer.active || token !== sleepPlayer.token) return;
+    await sleepDelay(180, token);
+    if (!sleepPlayer.active || token !== sleepPlayer.token) return;
+  }
+
+  // 3. 中文意思（简单/基础/进阶都有）
+  if (meanings[0]) {
+    await speakText(meanings[0], 'zh-CN', zhRate);
+    if (!sleepPlayer.active || token !== sleepPlayer.token) return;
+    await sleepDelay(180, token);
+    if (!sleepPlayer.active || token !== sleepPlayer.token) return;
+  }
+
+  // 4. 进阶版：单词讲解（例句英文 + 中文翻译）
+  if (mode === 'advanced') {
+    const en = sanitizeText(example.en || '');
+    if (en) {
+      await speakText(en, 'en-US', state.speed);
+      if (!sleepPlayer.active || token !== sleepPlayer.token) return;
+      await sleepDelay(150, token);
+      if (!sleepPlayer.active || token !== sleepPlayer.token) return;
+    }
+    const zh = sanitizeText(example.zh || '');
+    if (zh) {
+      await speakText(zh, 'zh-CN', zhRate);
+      if (!sleepPlayer.active || token !== sleepPlayer.token) return;
+    }
+  }
+}
+
 async function runSleep(label){
   if (!state.wordList.length) return;
   sleepPlayer.active = true;
@@ -1115,14 +1219,7 @@ async function runSleep(label){
     updateNowCard(item);
     updateStudy();
 
-    const meanings = splitMeanings(item.t);
-    await speakText(item.w, 'en-US', state.speed);
-    if (!sleepPlayer.active || token !== sleepPlayer.token) return;
-    await sleepDelay(220, token);
-    if (meanings[0]) await speakText(meanings[0], 'zh-CN', Math.max(0.9, state.speed));
-    if (!sleepPlayer.active || token !== sleepPlayer.token) return;
-    await sleepDelay(180, token);
-    if (meanings[1]) await speakText(meanings[1], 'zh-CN', Math.max(0.9, state.speed));
+    await playWordByMode(item, token);
     if (!sleepPlayer.active || token !== sleepPlayer.token) return;
 
     await sleepDelay(state.gap, token);
@@ -1196,6 +1293,34 @@ function updateAutoPlaySwitch(){
   autoPlaySwitch.classList.toggle('on', state.autoPlay);
 }
 
+// --- 播放模式 ---
+const MODE_META = {
+  simple:   { label: '简单版', desc: '自动播放：单词读音 + 中文意思' },
+  basic:    { label: '基础版', desc: '自动播放：单词读音 + 英文拼写 + 中文意思' },
+  advanced: { label: '进阶版', desc: '自动播放：单词读音 + 中文意思 + 单词讲解（例句）' }
+};
+
+function spellWord(item, rate){
+  // 英文拼读：逐个字母朗读
+  const letters = (item.w || '').split('').join(', ');
+  if (!letters.trim()) return Promise.resolve();
+  return speakText(letters, 'en-US', Math.max(0.8, rate));
+}
+
+function setMode(mode){
+  if (!MODE_META[mode]) mode = 'simple';
+  state.mode = mode;
+  localStorage.setItem('cet4_mode', mode);
+  renderMode();
+}
+function renderMode(){
+  modeText.textContent = MODE_META[state.mode].label;
+  modeDesc.textContent = MODE_META[state.mode].desc;
+  modeSelect.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === state.mode);
+  });
+}
+
 function toggleAutoPlay(){
   state.autoPlay = !state.autoPlay;
   localStorage.setItem('cet4_autoPlay', state.autoPlay ? '1' : '0');
@@ -1215,6 +1340,9 @@ playPauseBtn.onclick = toggleSleep;
 autoPlaySwitch.onclick = toggleAutoPlay;
 cardStage.onclick = flipCard;
 themeToggleButtons.forEach(btn => btn.onclick = toggleTheme);
+modeSelect.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.onclick = () => setMode(btn.dataset.mode);
+});
 
 document.addEventListener('keydown', (e) => {
   if (studyView.classList.contains('hidden')) return;
@@ -1234,6 +1362,7 @@ applyTheme(state.theme);
 buildHome();
 renderChips();
 updateAutoPlaySwitch();
+renderMode();
 initVoices();
 
 </script>
